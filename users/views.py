@@ -14,6 +14,7 @@ from .serializers import (
     UserLoginSerializer,
     UserProfileSerializer,
     AdminUserSerializer,
+    UserSerializer,
     ChangePasswordSerializer,
     PasswordResetRequestSerializer,
     PasswordResetConfirmSerializer,
@@ -97,6 +98,15 @@ class UserProfileView(generics.RetrieveUpdateAPIView):
     
     def get_object(self):
         return self.request.user
+
+class UserListView(generics.ListAPIView):
+    """
+    List all users. 
+    Only accessible by Admin/Staff users.
+    """
+    queryset = User.objects.all().order_by('-date_joined')
+    serializer_class = UserSerializer
+    permission_classes = [permissions.IsAdminUser]
 
 
 class AdminProfileView(generics.RetrieveAPIView):

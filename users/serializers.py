@@ -96,15 +96,24 @@ class UserProfileSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = User
-        fields = ('id', 'email', 'first_name', 'last_name', 'phone_number', 'profile_picture')
-        read_only_fields = ('id', 'email')
+        
+        fields = (
+            'id', 
+            'email', 
+            'first_name', 
+            'last_name', 
+            'phone_number', 
+            'profile_picture', 
+            'is_staff',    
+            'is_superuser'
+        )
+        read_only_fields = ('id', 'email', 'is_staff', 'is_superuser')
     
     def validate_email(self, value):
         """Ensure email cannot be changed through profile update."""
         if self.instance and value != self.instance.email:
             raise serializers.ValidationError("Email cannot be changed.")
         return value
-
 
 class AdminUserSerializer(serializers.ModelSerializer):
     """Serializer for admin user details."""
@@ -115,6 +124,20 @@ class AdminUserSerializer(serializers.ModelSerializer):
                   'is_staff', 'is_superuser', 'date_joined')
         read_only_fields = ('id', 'email', 'is_staff', 'is_superuser', 'date_joined')
 
+class UserSerializer(serializers.ModelSerializer):
+    """Serializer to list all users for the Admin Dashboard."""
+    
+    class Meta:
+        model = User
+        fields = (
+            'id', 
+            'email', 
+            'first_name', 
+            'last_name', 
+            'phone_number', 
+            'is_staff', 
+            'date_joined'
+        )
 
 class ChangePasswordSerializer(serializers.Serializer):
     """Serializer for password change."""

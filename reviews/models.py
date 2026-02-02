@@ -9,7 +9,7 @@ from menu.models import Food
 class Review(models.Model):
     """Review model for completed orders."""
     
-    order = models.OneToOneField(
+    order = models.ForeignKey(
         Order,
         on_delete=models.CASCADE,
         related_name='review'

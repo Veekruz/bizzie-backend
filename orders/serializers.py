@@ -3,6 +3,7 @@
 from rest_framework import serializers
 from .models import Order, OrderItem, OrderStatusHistory
 from menu.serializers import FoodListSerializer
+from reviews.models import Review
 
 
 class OrderItemSerializer(serializers.ModelSerializer):
@@ -11,19 +12,48 @@ class OrderItemSerializer(serializers.ModelSerializer):
     food = FoodListSerializer(read_only=True)
     total_price = serializers.DecimalField(max_digits=10, decimal_places=2, read_only=True)
     
+    # 1. Add the field definition
+    has_reviewed = serializers.SerializerMethodField()
+    
     class Meta:
         model = OrderItem
         fields = (
             'id', 'food', 'food_name', 'food_price', 'quantity',
-            'selected_variant', 'selected_addons', 'notes', 'total_price'
+            'selected_variant', 'selected_addons', 'notes', 'total_price',
+            'has_reviewed'  # 2. Add to fields list
         )
         read_only_fields = ('id', 'food_name', 'food_price')
+
+    def get_has_reviewed(self, obj):
+        """Check if the user has already reviewed this item in this order."""
+        try:
+            # We need the request context to know WHO is asking
+            request = self.context.get('request')
+            if not request or not request.user.is_authenticated:
+                return False
+            
+            user = request.user
+            
+            # Check if a review exists for this specific order + food + user combo
+            return Review.objects.filter(
+                order=obj.order, 
+                food=obj.food, 
+                user=user
+            ).exists()
+            
+        except (AttributeError, KeyError):
+            # Fallback for safety if context is missing
+            return False
 
 
 class OrderStatusHistorySerializer(serializers.ModelSerializer):
     """Serializer for order status history."""
-    
-    changed_by_email = serializers.EmailField(source='changed_by.email', read_only=True)
+
+    changed_by_email = serializers.EmailField(
+        source='changed_by.email', 
+        read_only=True, 
+        allow_null=True
+    )
     
     class Meta:
         model = OrderStatusHistory
@@ -35,7 +65,12 @@ class OrderSerializer(serializers.ModelSerializer):
     """Serializer for orders."""
     
     items = OrderItemSerializer(many=True, read_only=True)
-    status_history = OrderStatusHistorySerializer(many=True, read_only=True)
+    
+    status_history = OrderStatusHistorySerializer(
+        many=True, 
+        read_only=True
+    )
+
     user_email = serializers.EmailField(source='user.email', read_only=True)
     user_name = serializers.CharField(source='user.first_name', read_only=True)
     
@@ -56,13 +91,15 @@ class OrderSerializer(serializers.ModelSerializer):
             'shipped_at', 'completed_at', 'status_history'
         )
 
-
 class CreateOrderSerializer(serializers.ModelSerializer):
     """Serializer for creating orders from cart."""
     
+    # Add 'note' as a write-only field to accept what the frontend sends
+    note = serializers.CharField(required=False, write_only=True, allow_blank=True)
+
     class Meta:
         model = Order
-        fields = ('delivery_address', 'phone_number', 'delivery_notes')
+        fields = ('delivery_address', 'phone_number', 'delivery_notes', 'note')
     
     def validate(self, attrs):
         """Validate order data."""
@@ -79,6 +116,10 @@ class CreateOrderSerializer(serializers.ModelSerializer):
         request = self.context.get('request')
         user = request.user
         
+        # 1. HANDLE NOTES LOGIC (The Fix)
+        # Check 'delivery_notes' first, fallback to 'note', default to empty string
+        delivery_instruction = validated_data.get('delivery_notes') or validated_data.get('note') or ''
+
         # Get user's active cart
         from cart.models import Cart
         try:
@@ -97,14 +138,15 @@ class CreateOrderSerializer(serializers.ModelSerializer):
             user=user,
             delivery_address=validated_data['delivery_address'],
             phone_number=validated_data['phone_number'],
-            delivery_notes=validated_data.get('delivery_notes', ''),
+            delivery_notes=delivery_instruction,
             total_amount=total_amount,
             items_count=cart.total_items
         )
         
-        # Create order items from cart items
+        # Create order items (Bulk Create for speed)
+        order_items = []
         for cart_item in cart.items.all():
-            OrderItem.objects.create(
+            order_items.append(OrderItem(
                 order=order,
                 food=cart_item.food,
                 food_name=cart_item.food.name,
@@ -113,7 +155,10 @@ class CreateOrderSerializer(serializers.ModelSerializer):
                 selected_variant=cart_item.selected_variant,
                 selected_addons=cart_item.selected_addons,
                 notes=cart_item.notes
-            )
+            ))
+        
+        if order_items:
+            OrderItem.objects.bulk_create(order_items)
         
         # Clear the cart
         cart.items.all().delete()

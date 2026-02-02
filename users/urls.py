@@ -7,6 +7,7 @@ from .views import (
     UserLoginView,
     UserProfileView,
     AdminProfileView,
+    UserListView,
     ChangePasswordView,
     PasswordResetRequestView,
     LogoutView,
@@ -25,6 +26,9 @@ urlpatterns = [
     path('admin-profile/', AdminProfileView.as_view(), name='admin_profile'),
     path('change-password/', ChangePasswordView.as_view(), name='change_password'),
     path('delete-account/', DeleteAccountView.as_view(), name='delete_account'),
+
+    # User Management (For Admin Dashboard)
+    path('all-customers/', UserListView.as_view(), name='all_customers'),
     
     # Password reset
     path('password-reset/', PasswordResetRequestView.as_view(), name='password_reset'),

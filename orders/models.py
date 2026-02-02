@@ -86,7 +86,7 @@ class Order(models.Model):
     @property
     def can_be_cancelled(self):
         """Check if order can be cancelled."""
-        return self.status in ['pending', 'paid'] and not self.is_paid
+        return self.status == 'pending' and not self.is_paid
     
     @property
     def is_delivered(self):
